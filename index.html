@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>PDF Editor Pro (Yons Lab)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0f0f13;
+  --surface: #17171f;
+  --surface2: #1e1e2a;
+  --surface3: #252535;
+  --border: #2e2e42;
+  --accent: #6c63ff;
+  --accent2: #ff6584;
+  --accent3: #43e8a0;
+  --text: #e8e8f0;
+  --text2: #9090b0;
+  --text3: #5a5a7a;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+  --toolbar-h: 52px;
+  --header-h: 52px;
+  --bottom-h: 64px;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow: hidden;
+  touch-action: pan-x pan-y;
+}
+
+/* ═══════════════════════════════
+   HEADER
+═══════════════════════════════ */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 10px;
+  z-index: 200;
+  flex-shrink: 0;
+  position: relative;
+}
+.logo {
+  font-size: 14px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.logo-icon {
+  width: 28px; height: 28px;
+  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+  flex-shrink: 0;
+}
+.file-name {
+  font-size: 12px; color: var(--text2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  flex: 1; min-width: 0;
+}
+.header-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* ═══════════════════════════════
+   COLLAPSIBLE TOOLBAR
+═══════════════════════════════ */
+.toolbar-wrap {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+  max-height: 0; /* collapsed by default on mobile, open on desktop */
+}
+.toolbar-wrap.open { max-height: 300px; }
+
+.toolbar-toggle {
+  width: 100%; height: 36px;
+  background: var(--surface2);
+  border: none; border-bottom: 1px solid var(--border);
+  color: var(--text2); font-size: 12px; font-weight: 600;
+  letter-spacing: 0.5px; text-transform: uppercase;
+  cursor: pointer; display: flex; align-items: center;
+  justify-content: center; gap: 6px;
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+}
+.toolbar-toggle-icon { transition: transform 0.2s; font-style: normal; font-size: 10px; }
+.toolbar-wrap.open + .toolbar-toggle .toolbar-toggle-icon,
+.toolbar-toggle.open .toolbar-toggle-icon { transform: rotate(180deg); }
+
+.toolbar-inner {
+  padding: 8px 12px 10px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+/* Toolbar rows */
+.tb-row {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.tb-label {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--text3);
+  width: 44px; flex-shrink: 0;
+}
+
+.tool-btn {
+  min-width: 44px; height: 44px;
+  border: none; background: var(--surface2);
+  color: var(--text2); border-radius: 10px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; transition: all 0.15s;
+  border: 1px solid transparent;
+  padding: 0 10px; white-space: nowrap; font-family: 'DM Sans', sans-serif;
+  font-size: 13px; font-weight: 500; gap: 5px;
+}
+.tool-btn:active { background: var(--surface3); transform: scale(0.96); }
+.tool-btn.active { background: rgba(108,99,255,0.2); color: var(--accent); border-color: rgba(108,99,255,0.4); }
+
+.font-select {
+  flex: 1; min-width: 0;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 8px 10px;
+  font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer;
+  height: 44px;
+}
+.font-size-input {
+  width: 56px; height: 44px;
+  background: var(--surface2); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px;
+  padding: 0 8px; font-size: 14px;
+  font-family: 'DM Mono', monospace; text-align: center;
+}
+
+/* ═══════════════════════════════
+   MAIN LAYOUT
+═══════════════════════════════ */
+.app-body {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - var(--header-h));
+  overflow: hidden;
+}
+
+.canvas-area {
+  flex: 1;
+  overflow: auto;
+  background: #0a0a10;
+  display: flex;
+  justify-content: center;
+  padding: 20px 16px 80px; /* bottom padding for the floating bar */
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-container {
+  position: relative; background: white;
+  box-shadow: var(--shadow);
+  border-radius: 2px;
+  align-self: flex-start;
+  flex-shrink: 0;
+}
+#pdf-canvas { display: block; }
+.overlay-canvas { position: absolute; top: 0; left: 0; pointer-events: none; }
+.elements-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+
+/* ═══════════════════════════════
+   ELEMENTS
+═══════════════════════════════ */
+.pdf-element {
+  position: absolute;
+  pointer-events: all;
+  user-select: none;
+  touch-action: none; /* let JS handle all touch on elements */
+}
+.pdf-element.selected { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pdf-element:not(.selected) { outline: 1px dashed transparent; outline-offset: 3px; }
+
+/* Text wrapper: padding zone = drag area */
+.pdf-element.text-el {
+  padding: 8px;   /* finger-friendly drag border */
+  cursor: move;
+}
+.element-text {
+  background: transparent; border: none; outline: none;
+  font-family: inherit; min-width: 80px; min-height: 28px;
+  color: #000; overflow: hidden;
+  cursor: text;
+  white-space: pre-wrap; word-wrap: break-word;
+  padding: 4px; line-height: 1.4;
+  pointer-events: all;
+  user-select: text;
+}
+
+.element-img { max-width: 100%; display: block; pointer-events: none; }
+.element-sig { display: block; pointer-events: none; }
+
+/* Large touch-friendly resize handle */
+.resize-handle {
+  position: absolute;
+  width: 28px; height: 28px;          /* big finger target */
+  background: var(--accent);
+  border: 3px solid white;
+  border-radius: 6px;
+  cursor: se-resize;
+  bottom: -14px; right: -14px;
+  z-index: 10;
+  touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: white;
+}
+/* Large touch-friendly delete button */
+.delete-btn {
+  position: absolute; top: -18px; right: -18px;
+  width: 32px; height: 32px;
+  background: var(--accent2); border: 3px solid white; border-radius: 50%;
+  color: white; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 20; line-height: 1;
+  touch-action: manipulation;
+}
+
+/* ═══════════════════════════════
+   BOTTOM ACTION BAR (phone nav)
+═══════════════════════════════ */
+.bottom-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--bottom-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 0 8px;
+  z-index: 200;
+  gap: 4px;
+}
+.bar-btn {
+  flex: 1;
+  height: 48px;
+  border: none; background: transparent;
+  color: var(--text2);
+  border-radius: 10px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 3px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.15s;
+  font-size: 9px; font-weight: 600;
+  letter-spacing: 0.3px; text-transform: uppercase;
+  -webkit-tap-highlight-color: transparent;
+}
+.bar-btn-icon { font-size: 20px; line-height: 1; }
+.bar-btn:active { background: var(--surface2); transform: scale(0.95); }
+.bar-btn.active { color: var(--accent); }
+
+/* ═══════════════════════════════
+   DROP ZONE
+═══════════════════════════════ */
+.drop-zone {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 16px; background: #0a0a10;
+  padding: 24px;
+}
+.drop-zone-inner {
+  border: 2px dashed var(--border); border-radius: 20px;
+  padding: 36px 24px; text-align: center;
+  transition: all 0.2s; cursor: pointer;
+  max-width: 360px; width: 100%;
+}
+.drop-zone-inner:hover, .drop-zone-inner.drag-over { border-color: var(--accent); background: rgba(108,99,255,0.05); }
+.drop-icon { font-size: 48px; margin-bottom: 16px; }
+.drop-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.drop-sub { font-size: 13px; color: var(--text2); margin-bottom: 20px; }
+
+/* ═══════════════════════════════
+   PAGE NAV
+═══════════════════════════════ */
+.page-nav {
+  position: fixed; bottom: calc(var(--bottom-h) + 10px); left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 14px;
+  display: none; align-items: center; gap: 10px;
+  z-index: 150; box-shadow: var(--shadow);
+  font-size: 13px; font-weight: 500;
+}
+.page-nav-btn {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--surface2); border: none;
+  color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; transition: all 0.15s;
+  touch-action: manipulation;
+}
+.page-nav-btn:active { background: var(--surface3); }
+.page-nav-btn:disabled { opacity: 0.3; }
+
+/* ═══════════════════════════════
+   MODAL
+═══════════════════════════════ */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+  z-index: 500; display: flex; align-items: flex-end;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px 32px;
+  width: 100%; max-height: 90vh; overflow-y: auto;
+  transform: translateY(20px); transition: transform 0.25s;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 18px; }
+.modal-title { font-size: 17px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; }
+.modal-close { width: 32px; height: 32px; background: var(--surface2); border: none; border-radius: 8px; color: var(--text2); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+
+#sig-canvas { width: 100%; height: 200px; background: #fff; border-radius: 12px; border: 2px dashed var(--border); cursor: crosshair; touch-action: none; display: block; }
+#sig-canvas.drawing { border-color: var(--accent); }
+.sig-toolbar { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.pen-colors { display: flex; gap: 10px; }
+.pen-color-btn { width: 32px; height: 32px; border-radius: 50%; border: 3px solid transparent; cursor: pointer; touch-action: manipulation; }
+.pen-color-btn.active { border-color: white; box-shadow: 0 0 0 2px var(--accent); }
+.pen-size-range { flex: 1; min-width: 80px; }
+
+/* ═══════════════════════════════
+   BUTTONS
+═══════════════════════════════ */
+.btn {
+  padding: 10px 18px; border-radius: 10px;
+  font-size: 14px; font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  border: none; cursor: pointer;
+  transition: all 0.15s;
+  display: inline-flex; align-items: center; gap: 6px;
+  touch-action: manipulation;
+  min-height: 44px;
+}
+.btn-primary { background: linear-gradient(135deg, var(--accent), #8b5cf6); color: white; }
+.btn-primary:active { opacity: 0.85; transform: scale(0.98); }
+.btn-secondary { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+.btn-secondary:active { background: var(--surface3); }
+.btn-danger { background: rgba(255,101,132,0.15); color: var(--accent2); border: 1px solid rgba(255,101,132,0.3); }
+
+/* ═══════════════════════════════
+   FORMAT SHEET (slide-up panel)
+═══════════════════════════════ */
+.format-sheet {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+  border-radius: 20px 20px 0 0;
+  padding: 0 16px 32px;
+  z-index: 300;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  max-height: 70vh; overflow-y: auto;
+}
+.format-sheet.open { transform: translateY(0); }
+.format-sheet-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 12px auto 16px; }
+.format-sheet-title { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text3); margin-bottom: 14px; padding: 0 4px; }
+.format-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.format-label { font-size: 12px; color: var(--text2); width: 48px; flex-shrink: 0; }
+.format-input { flex: 1; background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 8px; padding: 10px; font-size: 14px; font-family: 'DM Sans', sans-serif; }
+.format-input:focus { outline: none; border-color: var(--accent); }
+
+/* ═══════════════════════════════
+   STATUS BAR (hidden on mobile)
+═══════════════════════════════ */
+.status-bar { display: none; }
+
+/* ═══════════════════════════════
+   DESKTOP OVERRIDES (≥ 640px)
+═══════════════════════════════ */
+@media (min-width: 640px) {
+  :root { --header-h: 56px; --bottom-h: 0px; }
+
+  .app-body { flex-direction: row; }
+
+  .toolbar-wrap { max-height: none !important; overflow: visible; border-bottom: none; border-right: 1px solid var(--border); width: auto; }
+  .toolbar-toggle { display: none; }
+  .toolbar-inner { padding: 12px 16px; flex-direction: row; flex-wrap: wrap; align-items: center; gap: 4px; }
+  .tb-row { flex-wrap: nowrap; }
+  .tb-label { display: none; }
+  .tool-btn { min-width: 36px; height: 36px; font-size: 12px; }
+  .font-size-input { width: 48px; height: 36px; }
+  .font-select { height: 36px; padding: 4px 8px; font-size: 12px; }
+
+  /* Desktop: toolbar is horizontal strip at top */
+  .app-body { flex-direction: column; }
+  .toolbar-wrap { width: 100% !important; border-right: none; border-bottom: 1px solid var(--border); }
+  .toolbar-inner { flex-direction: row; flex-wrap: wrap; padding: 6px 12px; gap: 4px; align-items: center; }
+  .tb-row { gap: 4px; }
+
+  .canvas-area { padding: 32px; padding-bottom: 32px; }
+
+  .bottom-bar { display: none; }
+  .format-sheet { display: none !important; }
+
+  .resize-handle { width: 12px; height: 12px; bottom: -6px; right: -6px; border-radius: 3px; font-size: 0; }
+  .delete-btn { width: 22px; height: 22px; top: -11px; right: -11px; font-size: 11px; border-width: 2px; }
+
+  .page-nav { bottom: 20px; }
+
+  .modal-overlay { align-items: center; }
+  .modal { border-radius: 16px; max-width: 480px; }
+  .modal-handle { display: none; }
+
+  .status-bar { display: flex; background: var(--surface); border-top: 1px solid var(--border); padding: 0 16px; height: 26px; align-items: center; gap: 12px; font-size: 11px; color: var(--text3); flex-shrink: 0; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent3); }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">📄</div>
+    <span>PDF Editor Pro by Yons Labs</span>
+  </div>
+  <span class="file-name" id="file-name">No file open</span>
+  <div class="header-actions">
+    <button class="btn btn-secondary" onclick="document.getElementById('pdf-upload').click()" style="padding:0 12px;min-height:36px;font-size:13px;">📂 Open</button>
+    <button class="btn btn-primary" id="export-btn" onclick="exportPDF()" disabled style="padding:0 12px;min-height:36px;font-size:13px;">⬇ Export</button>
+    <input type="file" id="pdf-upload" accept=".pdf" style="display:none" onchange="loadPDF(this)">
+  </div>
+</header>
+
+<div class="app-body">
+
+  <!-- TOOLBAR (collapsible on mobile) -->
+  <div class="toolbar-wrap" id="toolbar-wrap">
+    <div class="toolbar-inner" id="toolbar-inner">
+
+      <div class="tb-row">
+        <span class="tb-label">Tool</span>
+        <button class="tool-btn active" id="tool-select" onclick="setTool('select')">↖ Select</button>
+        <button class="tool-btn" id="tool-text" onclick="setTool('text')">T Text</button>
+      </div>
+
+      <div class="tb-row">
+        <span class="tb-label">Font</span>
+        <select class="font-select" id="font-family" onchange="updateFontFamily()">
+          <option value="Arial">Arial</option>
+          <option value="Times New Roman">Times New Roman</option>
+          <option value="Courier New">Courier New</option>
+          <option value="Georgia">Georgia</option>
+          <option value="Helvetica">Helvetica</option>
+          <option value="Verdana">Verdana</option>
+        </select>
+        <input type="number" class="font-size-input" id="font-size" value="16" min="6" max="120" onchange="updateFontSize()">
+      </div>
+
+      <div class="tb-row">
+        <span class="tb-label">Style</span>
+        <button class="tool-btn" id="bold-btn" onclick="toggleBold()" style="font-weight:bold">B</button>
+        <button class="tool-btn" id="italic-btn" onclick="toggleItalic()" style="font-style:italic">I</button>
+        <button class="tool-btn" id="underline-btn" onclick="toggleUnderline()" style="text-decoration:underline">U</button>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;color:var(--text2);font-size:13px;min-height:44px;">
+          🎨<input type="color" id="text-color" value="#000000" onchange="updateTextColor()" style="width:32px;height:32px;border:none;border-radius:50%;cursor:pointer;padding:0;background:none;">
+        </label>
+      </div>
+
+      <div class="tb-row">
+        <span class="tb-label">Insert</span>
+        <button class="tool-btn" onclick="document.getElementById('img-upload').click()">🖼 Image</button>
+        <button class="tool-btn" onclick="openSignatureModal()">✍ Sign</button>
+        <input type="file" id="img-upload" accept="image/*" style="display:none" onchange="insertImage(this)">
+      </div>
+
+      <div class="tb-row">
+        <span class="tb-label">Edit</span>
+        <button class="tool-btn" onclick="deleteSelected()" style="color:var(--accent2)">🗑 Delete</button>
+        <button class="tool-btn" onclick="changeZoom(-10)">−</button>
+        <span style="font-size:12px;color:var(--text2);font-family:'DM Mono',monospace;min-width:36px;text-align:center" id="zoom-label">100%</span>
+        <button class="tool-btn" onclick="changeZoom(10)">+</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TOOLBAR TOGGLE (mobile only) -->
+  <button class="toolbar-toggle" id="toolbar-toggle" onclick="toggleToolbar()">
+    <span>Tools</span>
+    <span class="toolbar-toggle-icon" id="toggle-icon">▼</span>
+  </button>
+
+  <!-- CANVAS -->
+  <div class="canvas-area" id="canvas-area">
+    <div class="drop-zone" id="drop-zone">
+      <div class="drop-zone-inner" id="drop-inner"
+        ondragover="event.preventDefault();this.classList.add('drag-over')"
+        ondragleave="this.classList.remove('drag-over')"
+        ondrop="handleDrop(event)"
+        onclick="document.getElementById('pdf-upload').click()">
+        <div class="drop-icon">📄</div>
+        <div class="drop-title">Open a PDF</div>
+        <div class="drop-sub">Tap to browse, or drag & drop</div>
+        <button class="btn btn-primary" style="margin:0 auto">Choose File</button>
+      </div>
+    </div>
+
+    <div class="page-container" id="page-container" style="display:none">
+      <canvas id="pdf-canvas"></canvas>
+      <canvas class="overlay-canvas" id="overlay-canvas"></canvas>
+      <div class="elements-layer" id="elements-layer"></div>
+    </div>
+  </div>
+
+</div><!-- end app-body -->
+
+<!-- STATUS BAR (desktop only) -->
+<div class="status-bar">
+  <div class="status-dot"></div>
+  <span id="status-text">Ready</span>
+  <span style="margin-left:auto" id="coords-text"></span>
+</div>
+
+<!-- PAGE NAV -->
+<div class="page-nav" id="page-nav">
+  <button class="page-nav-btn" id="prev-page" onclick="changePage(-1)">‹</button>
+  <span id="page-info" style="white-space:nowrap">Page 1 / 1</span>
+  <button class="page-nav-btn" id="next-page" onclick="changePage(1)">›</button>
+</div>
+
+<!-- BOTTOM ACTION BAR (mobile only) -->
+<div class="bottom-bar" id="bottom-bar">
+  <button class="bar-btn active" id="bar-select" onclick="setTool('select');setActiveBar('bar-select')">
+    <span class="bar-btn-icon">↖</span>Select
+  </button>
+  <button class="bar-btn" id="bar-text" onclick="setTool('text');setActiveBar('bar-text')">
+    <span class="bar-btn-icon">T</span>Text
+  </button>
+  <button class="bar-btn" id="bar-image" onclick="document.getElementById('img-upload2').click()">
+    <span class="bar-btn-icon">🖼</span>Image
+    <input type="file" id="img-upload2" accept="image/*" style="display:none" onchange="insertImage(this)">
+  </button>
+  <button class="bar-btn" id="bar-sign" onclick="openSignatureModal()">
+    <span class="bar-btn-icon">✍</span>Sign
+  </button>
+  <button class="bar-btn" id="bar-format" onclick="openFormatSheet()">
+    <span class="bar-btn-icon">✏️</span>Format
+  </button>
+  <button class="bar-btn" id="bar-delete" onclick="deleteSelected()" style="color:var(--accent2)">
+    <span class="bar-btn-icon">🗑</span>Delete
+  </button>
+</div>
+
+<!-- FORMAT SHEET (mobile slide-up) -->
+<div class="format-sheet" id="format-sheet">
+  <div class="format-sheet-handle" onclick="closeFormatSheet()"></div>
+  <div class="format-sheet-title">Format Text</div>
+  <div class="format-row">
+    <span class="format-label">Font</span>
+    <select class="format-input" id="mob-font-family" onchange="fontFamily=this.value;updateFontFamily()">
+      <option value="Arial">Arial</option>
+      <option value="Times New Roman">Times New Roman</option>
+      <option value="Courier New">Courier New</option>
+      <option value="Georgia">Georgia</option>
+      <option value="Helvetica">Helvetica</option>
+      <option value="Verdana">Verdana</option>
+    </select>
+  </div>
+  <div class="format-row">
+    <span class="format-label">Size</span>
+    <input type="number" class="format-input" id="mob-font-size" value="16" min="6" max="120" onchange="fontSize=+this.value;updateFontSize()" style="width:80px;flex:none;">
+  </div>
+  <div class="format-row">
+    <span class="format-label">Color</span>
+    <input type="color" id="mob-text-color" value="#000000" onchange="textColor=this.value;updateTextColor()" style="width:48px;height:44px;border:none;border-radius:10px;cursor:pointer;padding:0;background:none;">
+  </div>
+  <div class="format-row" style="gap:10px;">
+    <span class="format-label">Style</span>
+    <button class="tool-btn" id="mob-bold" onclick="toggleBold()" style="font-weight:bold;flex:1">B Bold</button>
+    <button class="tool-btn" id="mob-italic" onclick="toggleItalic()" style="font-style:italic;flex:1">I Italic</button>
+    <button class="tool-btn" id="mob-underline" onclick="toggleUnderline()" style="text-decoration:underline;flex:1">U Line</button>
+  </div>
+  <div style="display:flex;gap:10px;margin-top:6px;">
+    <button class="btn btn-secondary" style="flex:1" onclick="closeFormatSheet()">Done</button>
+    <button class="btn btn-danger" style="flex:1" onclick="deleteSelected();closeFormatSheet()">🗑 Delete</button>
+  </div>
+</div>
+
+<!-- SIGNATURE MODAL -->
+<div class="modal-overlay" id="sig-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      ✍ Draw Signature
+      <button class="modal-close" onclick="closeSigModal()">✕</button>
+    </div>
+    <canvas id="sig-canvas" width="432" height="200"></canvas>
+    <div class="sig-toolbar">
+      <div class="pen-colors">
+        <button class="pen-color-btn active" style="background:#000" data-color="#000000" onclick="setPenColor(this)"></button>
+        <button class="pen-color-btn" style="background:#1a56db" data-color="#1a56db" onclick="setPenColor(this)"></button>
+        <button class="pen-color-btn" style="background:#c0392b" data-color="#c0392b" onclick="setPenColor(this)"></button>
+        <button class="pen-color-btn" style="background:#27ae60" data-color="#27ae60" onclick="setPenColor(this)"></button>
+      </div>
+      <input type="range" class="pen-size-range" id="pen-size" min="1" max="8" value="2">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn btn-secondary" style="flex:1" onclick="clearSig()">Clear</button>
+      <button class="btn btn-primary" style="flex:1" onclick="insertSignature()">Insert</button>
+    </div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+// ── State ──
+let pdfDoc = null, currentPage = 1, totalPages = 0;
+let zoom = 1, currentTool = 'select';
+let elements = {};
+let selectedEl = null;
+let pdfArrayBuffer = null;
+let textBold = false, textItalic = false, textUnderline = false;
+let textColor = '#000000', fontSize = 16, fontFamily = 'Arial';
+
+// ── Mobile UI ──
+function toggleToolbar() {
+  const wrap = document.getElementById('toolbar-wrap');
+  const icon = document.getElementById('toggle-icon');
+  wrap.classList.toggle('open');
+  icon.textContent = wrap.classList.contains('open') ? '▲' : '▼';
+}
+function openFormatSheet()  { document.getElementById('format-sheet').classList.add('open'); }
+function closeFormatSheet() { document.getElementById('format-sheet').classList.remove('open'); }
+function setActiveBar(id) {
+  document.querySelectorAll('.bar-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(id)?.classList.add('active');
+}
+
+// ── PDF Loading ──
+async function loadPDF(input) {
+  const file = input.files[0];
+  if (!file) return;
+  pdfArrayBuffer = await file.arrayBuffer();
+  pdfDoc = await pdfjsLib.getDocument(new Uint8Array(pdfArrayBuffer)).promise;
+  totalPages = pdfDoc.numPages;
+  elements = {};
+  document.getElementById('file-name').textContent = file.name;
+  document.getElementById('drop-zone').style.display = 'none';
+  document.getElementById('page-container').style.display = 'block';
+  document.getElementById('page-nav').style.display = 'flex';
+  document.getElementById('export-btn').disabled = false;
+  currentPage = 1;
+  await renderPage(currentPage);
+  updatePageNav();
+  updateStatus('Loaded: ' + file.name);
+  // Auto-close toolbar on mobile after loading
+  if (window.innerWidth < 640) document.getElementById('toolbar-wrap').classList.remove('open');
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-inner').classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf') loadPDF({ files: [file] });
+}
+
+async function renderPage(num) {
+  const page = await pdfDoc.getPage(num);
+  // On mobile, fit to screen width
+  const maxW = Math.min(window.innerWidth - 32, 800);
+  const naturalVp = page.getViewport({ scale: 1 });
+  const mobileScale = Math.min(zoom, maxW / naturalVp.width);
+  const vp = page.getViewport({ scale: window.innerWidth < 640 ? mobileScale : zoom });
+
+  const canvas = document.getElementById('pdf-canvas');
+  canvas.width = vp.width; canvas.height = vp.height;
+  await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  const oc = document.getElementById('overlay-canvas');
+  oc.width = vp.width; oc.height = vp.height;
+  const c = document.getElementById('page-container');
+  c.style.width = vp.width + 'px'; c.style.height = vp.height + 'px';
+  renderElements(num);
+  document.getElementById('page-info').textContent = `Page ${num} / ${totalPages}`;
+}
+
+function changePage(d) {
+  const n = currentPage + d;
+  if (n < 1 || n > totalPages) return;
+  currentPage = n; renderPage(n); updatePageNav();
+}
+function updatePageNav() {
+  document.getElementById('page-info').textContent = `Page ${currentPage} / ${totalPages}`;
+  document.getElementById('prev-page').disabled = currentPage === 1;
+  document.getElementById('next-page').disabled = currentPage === totalPages;
+}
+function changeZoom(d) {
+  zoom = Math.max(0.3, Math.min(3, zoom + d / 100));
+  document.getElementById('zoom-label').textContent = Math.round(zoom * 100) + '%';
+  if (pdfDoc) renderPage(currentPage);
+}
+
+// ── Tool ──
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('[id^="tool-"]').forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-' + tool)?.classList.add('active');
+  updateStatus('Tool: ' + tool);
+}
+
+// ── Elements ──
+function getPageElements() {
+  if (!elements[currentPage]) elements[currentPage] = [];
+  return elements[currentPage];
+}
+function addElement(el) {
+  getPageElements().push(el);
+  renderElements(currentPage);
+  selectElement(el.id);
+}
+function findElement(id) {
+  for (const p in elements) { const f = elements[p].find(e => e.id === id); if (f) return f; }
+  return null;
+}
+
+// ── renderElements ──
+function renderElements(pageNum) {
+  const layer = document.getElementById('elements-layer');
+  layer.innerHTML = '';
+  const els = elements[pageNum] || [];
+
+  els.forEach(el => {
+    const wrapper = document.createElement('div');
+    wrapper.className = 'pdf-element' + (selectedEl === el.id ? ' selected' : '');
+    wrapper.id = 'el-' + el.id;
+    wrapper.style.left   = el.x + 'px';
+    wrapper.style.top    = el.y + 'px';
+    wrapper.style.width  = el.width ? el.width + 'px' : 'auto';
+    wrapper.style.zIndex = el.z || 1;
+
+    if (el.type === 'text') {
+      wrapper.classList.add('text-el');
+
+      // Wrapper border zone → drag (mouse + touch)
+      wrapper.addEventListener('mousedown', e => {
+        if (e.target !== wrapper) return;
+        e.preventDefault();
+        selectElement(el.id);
+        startDrag(e, el);
+      });
+      wrapper.addEventListener('touchstart', e => {
+        if (e.target !== wrapper) return;
+        e.preventDefault();
+        selectElement(el.id);
+        startDragTouch(e, el);
+      }, { passive: false });
+
+      const txt = document.createElement('div');
+      txt.className = 'element-text';
+      txt.contentEditable = 'true';
+      txt.innerHTML = el.content || 'Text here';
+      txt.style.fontSize       = (el.fontSize || 16) + 'px';
+      txt.style.fontFamily     =  el.fontFamily || 'Arial';
+      txt.style.color          =  el.color || '#000';
+      txt.style.fontWeight     =  el.bold ? 'bold' : 'normal';
+      txt.style.fontStyle      =  el.italic ? 'italic' : 'normal';
+      txt.style.textDecoration =  el.underline ? 'underline' : 'none';
+      if (el.width) txt.style.width = el.width + 'px';
+      txt.addEventListener('input', () => { el.content = txt.innerHTML; });
+      txt.addEventListener('mousedown', e => {
+        e.stopPropagation();
+        if (selectedEl !== el.id) selectElement(el.id);
+      });
+      txt.addEventListener('touchstart', e => {
+        e.stopPropagation();
+        if (selectedEl !== el.id) selectElement(el.id);
+      }, { passive: true });
+      wrapper.appendChild(txt);
+
+    } else {
+      const img = document.createElement('img');
+      img.className = el.type === 'signature' ? 'element-sig' : 'element-img';
+      img.src = el.src;
+      if (el.width)  img.style.width  = el.width  + 'px';
+      if (el.height) img.style.height = el.height + 'px';
+      wrapper.appendChild(img);
+      wrapper.style.cursor = 'move';
+
+      // Mouse drag
+      wrapper.addEventListener('mousedown', e => {
+        if (e.target.classList.contains('resize-handle') || e.target.classList.contains('delete-btn')) return;
+        e.preventDefault(); selectElement(el.id); startDrag(e, el);
+      });
+      // Touch drag
+      wrapper.addEventListener('touchstart', e => {
+        if (e.target.classList.contains('resize-handle') || e.target.classList.contains('delete-btn')) return;
+        e.preventDefault(); selectElement(el.id); startDragTouch(e, el);
+      }, { passive: false });
+    }
+
+    // Selection controls
+    if (selectedEl === el.id) {
+      const rh = document.createElement('div');
+      rh.className = 'resize-handle';
+      rh.textContent = '⤡';
+      rh.addEventListener('mousedown', e => startResize(e, el));
+      rh.addEventListener('touchstart', e => startResizeTouch(e, el), { passive: false });
+      wrapper.appendChild(rh);
+
+      const db = document.createElement('div');
+      db.className = 'delete-btn';
+      db.textContent = '✕';
+      db.addEventListener('click', e => { e.stopPropagation(); removeElement(el.id); });
+      db.addEventListener('touchend', e => { e.stopPropagation(); e.preventDefault(); removeElement(el.id); });
+      wrapper.appendChild(db);
+    }
+
+    layer.appendChild(wrapper);
+  });
+}
+
+// ── Drag (mouse) ──
+function startDrag(e, el) {
+  const cr = document.getElementById('page-container').getBoundingClientRect();
+  const offX = e.clientX - cr.left - el.x;
+  const offY = e.clientY - cr.top  - el.y;
+  function onMove(ev) {
+    el.x = Math.max(0, ev.clientX - cr.left - offX);
+    el.y = Math.max(0, ev.clientY - cr.top  - offY);
+    const w = document.getElementById('el-' + el.id);
+    if (w) { w.style.left = el.x + 'px'; w.style.top = el.y + 'px'; }
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    updateStatus('Moved');
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ── Drag (touch) ──
+function startDragTouch(e, el) {
+  const cr = document.getElementById('page-container').getBoundingClientRect();
+  const t0 = e.touches[0];
+  const offX = t0.clientX - cr.left - el.x;
+  const offY = t0.clientY - cr.top  - el.y;
+  function onMove(ev) {
+    const t = ev.touches[0];
+    el.x = Math.max(0, t.clientX - cr.left - offX);
+    el.y = Math.max(0, t.clientY - cr.top  - offY);
+    const w = document.getElementById('el-' + el.id);
+    if (w) { w.style.left = el.x + 'px'; w.style.top = el.y + 'px'; }
+  }
+  function onEnd() {
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+    updateStatus('Moved');
+  }
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+}
+
+// ── Resize (mouse) ──
+function startResize(e, el) {
+  e.preventDefault(); e.stopPropagation();
+  const sx = e.clientX, sy = e.clientY;
+  const sw = el.width || 100, sh = el.height || 100;
+  function onMove(ev) {
+    el.width  = Math.max(40, sw + (ev.clientX - sx));
+    el.height = Math.max(20, sh + (ev.clientY - sy));
+    renderElements(currentPage);
+  }
+  function onUp() {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// ── Resize (touch) ──
+function startResizeTouch(e, el) {
+  e.preventDefault(); e.stopPropagation();
+  const t0 = e.touches[0];
+  const sx = t0.clientX, sy = t0.clientY;
+  const sw = el.width || 100, sh = el.height || 100;
+  function onMove(ev) {
+    const t = ev.touches[0];
+    el.width  = Math.max(40, sw + (t.clientX - sx));
+    el.height = Math.max(20, sh + (t.clientY - sy));
+    renderElements(currentPage);
+  }
+  function onEnd() {
+    document.removeEventListener('touchmove', onMove);
+    document.removeEventListener('touchend', onEnd);
+  }
+  document.addEventListener('touchmove', onMove, { passive: false });
+  document.addEventListener('touchend', onEnd);
+}
+
+// ── Selection ──
+function selectElement(id) {
+  if (selectedEl === id) return;
+  selectedEl = id;
+  renderElements(currentPage);
+  updateStatus('Selected');
+}
+function deselectAll() {
+  if (!selectedEl) return;
+  selectedEl = null;
+  renderElements(currentPage);
+  updateStatus('Ready');
+}
+
+// Tap on canvas background
+document.getElementById('canvas-area').addEventListener('mousedown', e => {
+  const targets = [document.getElementById('canvas-area'), document.getElementById('pdf-canvas'), document.getElementById('overlay-canvas')];
+  if (!targets.includes(e.target)) return;
+  if (currentTool === 'text')        addTextAt(e.clientX, e.clientY);
+  else if (currentTool === 'select') deselectAll();
+});
+document.getElementById('canvas-area').addEventListener('touchend', e => {
+  const targets = [document.getElementById('canvas-area'), document.getElementById('pdf-canvas'), document.getElementById('overlay-canvas')];
+  if (!targets.includes(e.target)) return;
+  const t = e.changedTouches[0];
+  if (currentTool === 'text')        addTextAt(t.clientX, t.clientY);
+  else if (currentTool === 'select') deselectAll();
+}, { passive: true });
+
+function addTextAt(cx, cy) {
+  if (!pdfDoc) return;
+  const r = document.getElementById('page-container').getBoundingClientRect();
+  addElement({
+    id: 'el_' + Date.now(), type: 'text',
+    x: Math.max(0, cx - r.left), y: Math.max(0, cy - r.top),
+    content: 'Text here', fontSize, fontFamily, color: textColor,
+    bold: textBold, italic: textItalic, underline: textUnderline,
+    width: 160, z: getPageElements().length + 1
+  });
+  setTool('select');
+  setActiveBar('bar-select');
+}
+
+// ── Toolbar actions ──
+function toggleBold() {
+  textBold = !textBold;
+  document.getElementById('bold-btn')?.classList.toggle('active', textBold);
+  document.getElementById('mob-bold')?.classList.toggle('active', textBold);
+  applyToSelected(el => { el.bold = textBold; });
+}
+function toggleItalic() {
+  textItalic = !textItalic;
+  document.getElementById('italic-btn')?.classList.toggle('active', textItalic);
+  document.getElementById('mob-italic')?.classList.toggle('active', textItalic);
+  applyToSelected(el => { el.italic = textItalic; });
+}
+function toggleUnderline() {
+  textUnderline = !textUnderline;
+  document.getElementById('underline-btn')?.classList.toggle('active', textUnderline);
+  document.getElementById('mob-underline')?.classList.toggle('active', textUnderline);
+  applyToSelected(el => { el.underline = textUnderline; });
+}
+function updateFontFamily() {
+  fontFamily = document.getElementById('font-family').value;
+  applyToSelected(el => { if (el.type === 'text') el.fontFamily = fontFamily; });
+}
+function updateFontSize() {
+  fontSize = parseInt(document.getElementById('font-size').value) || 16;
+  applyToSelected(el => { if (el.type === 'text') el.fontSize = fontSize; });
+}
+function updateTextColor() {
+  textColor = document.getElementById('text-color').value ||
+              document.getElementById('mob-text-color').value;
+  applyToSelected(el => { if (el.type === 'text') el.color = textColor; });
+}
+function applyToSelected(fn) {
+  if (!selectedEl) return;
+  const el = findElement(selectedEl);
+  if (el) { fn(el); renderElements(currentPage); }
+}
+
+function deleteSelected() {
+  if (!selectedEl) return;
+  for (const p in elements) elements[p] = elements[p].filter(e => e.id !== selectedEl);
+  selectedEl = null;
+  renderElements(currentPage);
+  updateStatus('Deleted');
+}
+function removeElement(id) {
+  for (const p in elements) elements[p] = elements[p].filter(e => e.id !== id);
+  if (selectedEl === id) selectedEl = null;
+  renderElements(currentPage);
+}
+
+// ── Image insert ──
+function insertImage(input) {
+  const file = input.files[0];
+  if (!file || !pdfDoc) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    addElement({ id: 'el_' + Date.now(), type: 'image', x: 20, y: 20,
+      src: e.target.result, width: 180, height: 135, z: getPageElements().length + 1 });
+    updateStatus('Image inserted');
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+// ── Signature ──
+let sigCtx, sigColor = '#000000';
+function openSignatureModal() {
+  if (!pdfDoc) { alert('Please open a PDF first'); return; }
+  document.getElementById('sig-modal').classList.add('open');
+  const c = document.getElementById('sig-canvas');
+  // Resize canvas to match display width
+  c.width = c.offsetWidth || 432;
+  sigCtx = c.getContext('2d');
+  clearSig();
+  setupSigPad(c);
+}
+function closeSigModal() { document.getElementById('sig-modal').classList.remove('open'); }
+function clearSig() {
+  const c = document.getElementById('sig-canvas');
+  sigCtx.clearRect(0, 0, c.width, c.height);
+  sigCtx.fillStyle = '#fff'; sigCtx.fillRect(0, 0, c.width, c.height);
+}
+function setPenColor(btn) {
+  document.querySelectorAll('.pen-color-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active'); sigColor = btn.dataset.color;
+}
+function setupSigPad(canvas) {
+  let painting = false, lx = 0, ly = 0;
+  const pos = e => {
+    const r = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width, sy = canvas.height / r.height;
+    if (e.touches) return [(e.touches[0].clientX - r.left)*sx, (e.touches[0].clientY - r.top)*sy];
+    return [(e.clientX - r.left)*sx, (e.clientY - r.top)*sy];
+  };
+  const draw = (x, y) => {
+    sigCtx.beginPath(); sigCtx.moveTo(lx, ly); sigCtx.lineTo(x, y);
+    sigCtx.strokeStyle = sigColor;
+    sigCtx.lineWidth = parseInt(document.getElementById('pen-size').value);
+    sigCtx.lineCap = sigCtx.lineJoin = 'round'; sigCtx.stroke();
+    [lx, ly] = [x, y];
+  };
+  canvas.onmousedown  = e => { painting = true; [lx,ly]=pos(e); e.preventDefault(); };
+  canvas.onmousemove  = e => { if (painting) { const [x,y]=pos(e); draw(x,y); } };
+  canvas.onmouseup    = () => painting = false;
+  canvas.onmouseleave = () => painting = false;
+  canvas.ontouchstart = e => { e.preventDefault(); painting = true; canvas.classList.add('drawing'); [lx,ly]=pos(e); };
+  canvas.ontouchmove  = e => { e.preventDefault(); if (painting) { const [x,y]=pos(e); draw(x,y); } };
+  canvas.ontouchend   = () => { painting = false; canvas.classList.remove('drawing'); };
+}
+function insertSignature() {
+  const dataUrl = document.getElementById('sig-canvas').toDataURL('image/png');
+  addElement({ id: 'el_' + Date.now(), type: 'signature', x: 20, y: 20,
+    src: dataUrl, width: 180, height: 72, z: getPageElements().length + 1 });
+  closeSigModal(); updateStatus('Signature inserted');
+}
+
+// ── Export ──
+async function exportPDF() {
+  if (!pdfDoc || !pdfArrayBuffer) return;
+  updateStatus('Exporting…');
+  const { jsPDF } = window.jspdf;
+  let pdf, firstPage = true;
+  for (let pn = 1; pn <= totalPages; pn++) {
+    const page = await pdfDoc.getPage(pn);
+    const vp = page.getViewport({ scale: 2 });
+    const off = document.createElement('canvas');
+    off.width = vp.width; off.height = vp.height;
+    const ctx = off.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    for (const el of (elements[pn] || [])) {
+      const s = 2, x = el.x * s, y = el.y * s;
+      if (el.type === 'text') {
+        const raw = el.content?.replace(/<[^>]+>/g, '') || '';
+        ctx.save();
+        ctx.font = `${el.italic?'italic ':''} ${el.bold?'bold ':''} ${(el.fontSize||16)*s}px ${el.fontFamily||'Arial'}`;
+        ctx.fillStyle = el.color || '#000';
+        const maxW = (el.width||300)*s;
+        let line = '', ly = y + (el.fontSize||16)*s;
+        for (const w of raw.split(' ')) {
+          const test = line + (line?' ':'') + w;
+          if (ctx.measureText(test).width > maxW && line) {
+            ctx.fillText(line, x, ly);
+            if (el.underline) ctx.fillRect(x, ly+2*s, ctx.measureText(line).width, s);
+            line = w; ly += (el.fontSize||16)*s*1.4;
+          } else line = test;
+        }
+        if (line) { ctx.fillText(line, x, ly); if (el.underline) ctx.fillRect(x, ly+2*s, ctx.measureText(line).width, s); }
+        ctx.restore();
+      } else {
+        await new Promise(res => {
+          const img = new Image(); img.onload = () => { ctx.drawImage(img, x, y, (el.width||180)*s, (el.height||135)*s); res(); };
+          img.onerror = res; img.src = el.src;
+        });
+      }
+    }
+    const orient = vp.width > vp.height ? 'l' : 'p';
+    const pw = vp.width/2*0.264583, ph = vp.height/2*0.264583;
+    if (firstPage) { pdf = new jsPDF({ orientation: orient, unit: 'mm', format: [pw,ph] }); firstPage = false; }
+    else pdf.addPage([pw,ph], orient);
+    pdf.addImage(off.toDataURL('image/jpeg',0.92), 'JPEG', 0, 0, pw, ph);
+  }
+  pdf.save('edited-document.pdf');
+  updateStatus('Exported!');
+}
+
+function updateStatus(msg) {
+  const s = document.getElementById('status-text');
+  if (s) s.textContent = msg;
+}
+
+// ── Keyboard shortcuts (desktop) ──
+document.addEventListener('keydown', e => {
+  const active = document.activeElement;
+  if (active.contentEditable === 'true' || active.tagName === 'INPUT') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+  if (e.key === 'Escape') deselectAll();
+  if (e.key === 't' && !e.ctrlKey && !e.metaKey) { setTool('text'); setActiveBar('bar-text'); }
+  if (e.key === 's' && !e.ctrlKey && !e.metaKey) { setTool('select'); setActiveBar('bar-select'); }
+});
+
+// Close format sheet when tapping canvas
+document.getElementById('canvas-area').addEventListener('touchend', () => {
+  closeFormatSheet();
+}, { passive: true });
+</script>
+</body>
+</html>
